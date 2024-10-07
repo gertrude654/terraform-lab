@@ -68,7 +68,7 @@ resource "aws_iam_role" "ec2_role" {
 
 # Create an EC2 instance
 resource "aws_instance" "microservice" {
-  ami           = "ami-00f251754ac5da7f0"  # Amazon Linux 2 AMI (HVM), SSD Volume Type
+  ami           = "ami-08eb150f611ca277f"  # Amazon Linux 2 AMI (HVM), SSD Volume Type
   instance_type = "t2.micro"
   subnet_id     = aws_subnet.main.id
 
