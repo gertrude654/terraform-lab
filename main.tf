@@ -1,11 +1,56 @@
-# Provider configuration
+# Configure the AWS provider
 provider "aws" {
-  region = "us-east-1"
+  region = "us-west-2"
 }
 
-# IAM Role for EC2
+# Create a VPC
+resource "aws_vpc" "main" {
+  cidr_block = "10.0.0.0/16"
+
+  tags = {
+    Name = "main-vpc"
+  }
+}
+
+# Create a subnet
+resource "aws_subnet" "main" {
+  vpc_id     = aws_vpc.main.id
+  cidr_block = "10.0.1.0/24"
+
+  tags = {
+    Name = "main-subnet"
+  }
+}
+
+# Create a security group
+resource "aws_security_group" "allow_http" {
+  name        = "allow_http"
+  description = "Allow HTTP inbound traffic"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description = "HTTP from VPC"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = [aws_vpc.main.cidr_block]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "allow_http"
+  }
+}
+
+# Create an IAM role
 resource "aws_iam_role" "ec2_role" {
-  name = "ec2_microservice_role"
+  name = "ec2_role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -21,49 +66,28 @@ resource "aws_iam_role" "ec2_role" {
   })
 }
 
-# IAM policy attachment for the role (e.g., allowing S3 access)
-resource "aws_iam_role_policy_attachment" "ec2_s3_access" {
-  role       = aws_iam_role.ec2_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
-}
-
-# Security group
-resource "aws_security_group" "allow_http" {
-  name        = "allow_http"
-  description = "Allow HTTP inbound traffic"
-
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-# EC2 instance
+# Create an EC2 instance
 resource "aws_instance" "microservice" {
-  ami           = "ami-0c55b159cbfafe1f0"  # Example AMI (replace with actual one)
+  ami           = "ami-0c55b159cbfafe1f0"  # Amazon Linux 2 AMI (HVM), SSD Volume Type
   instance_type = "t2.micro"
-  key_name      = "your-ssh-key"           # Make sure you have the key
+  subnet_id     = aws_subnet.main.id
 
-  iam_instance_profile = aws_iam_instance_profile.ec2_instance_profile.name
-
-  security_groups = [aws_security_group.allow_http.name]
+  vpc_security_group_ids = [aws_security_group.allow_http.id]
+  iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
 
   tags = {
-    Name = "Microservice-Instance"
+    Name = "microservice-instance"
   }
 }
 
-# Attach IAM role to EC2
-resource "aws_iam_instance_profile" "ec2_instance_profile" {
-  name = "ec2_instance_profile"
+# Create an IAM instance profile
+resource "aws_iam_instance_profile" "ec2_profile" {
+  name = "ec2_profile"
   role = aws_iam_role.ec2_role.name
+}
+
+# Output the public IP of the EC2 instance
+output "instance_public_ip" {
+  description = "Public IP address of the EC2 instance"
+  value       = aws_instance.microservice.public_ip
 }
